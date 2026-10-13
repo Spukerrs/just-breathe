@@ -1,0 +1,53 @@
+# Node / Dependencias
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+web-build/
+
+# Variables de entorno y secretos
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Android (Prebuild / Bare workflow)
+android/app/build/
+android/.gradle/
+android/build/
+android/app/.cxx/
+*.apk
+*.aab
+
+# iOS (Prebuild / Bare workflow)
+ios/Pods/
+ios/build/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# TypeScript / Metro Bundler cache
+*.tsbuildinfo
+.metro-health-check*
+
+# Sistema Operativo y Linux
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.directory
+.flatpak-info
+
+# IDEs y Editores
+.vscode/.react/
+.idea/
+*.sublime-project
+*.sublime-workspace
