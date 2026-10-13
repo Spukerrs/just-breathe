@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -163,6 +163,22 @@ export const sleepService = {
     await AsyncStorage.removeItem(SLEEP_STORAGE_KEYS.ACTIVE_SESSION);
   },
 
+  /**
+   * Borra absolutamente todos los registros y sesiones almacenados localmente.
+   */
+  async clearAllSleepData(): Promise<void> {
+    try {
+      await AsyncStorage.multiRemove([
+        SLEEP_STORAGE_KEYS.LOGS,
+        SLEEP_STORAGE_KEYS.ACTIVE_SESSION,
+        SLEEP_STORAGE_KEYS.SHORTCUTS,
+        SLEEP_STORAGE_KEYS.ACHIEVEMENTS,
+      ]);
+    } catch (error) {
+      console.error('[SleepService] Error al limpiar datos:', error);
+    }
+  },
+
   // ------------------------------------------
   // ATAJOS, LOGROS Y RUIDOS LOCALES
   // ------------------------------------------
@@ -185,15 +201,15 @@ export const sleepService = {
         return { ...ach, current: Math.min(ach.target, stats.totalLogsLast7Days) };
       }
       if (ach.id === 'ach_tracking') {
-        return { ...ach, current: Math.min(ach.target, Math.max(10, totalLogs * 35)) };
+        return { ...ach, current: Math.min(ach.target, totalLogs) };
       }
       if (ach.id === 'ach_score') {
         return {
           ...ach,
-          current: stats.averageQuality > 0 ? Math.round(stats.averageQuality * 19.5) : 0,
+          current: stats.averageQuality > 0 ? Math.round(stats.averageQuality * 20) : 0,
         };
       }
-      return ach;
+      return { ...ach, current: 0 };
     });
   },
 

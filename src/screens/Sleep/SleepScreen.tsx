@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,11 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
+  Animated,
+  Easing,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
@@ -35,11 +39,179 @@ import {
   DEFAULT_SLEEP_TAGS,
 } from '../../constants/sleepConstants';
 
-// Pestañas principales inspiradas en las capturas de pantalla
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GRID_CARD_WIDTH = (SCREEN_WIDTH - 44) / 2;
+
+// Módulos de descanso
 type SleepModuleTab = 'shortcuts' | 'assistant' | 'sounds' | 'noises' | 'achievements';
 
+interface SleepModuleItem {
+  id: SleepModuleTab;
+  title: string;
+  subtitle: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  activeColor: string;
+  badge: string;
+  actionText: string;
+}
+
+const SLEEP_MODULES: SleepModuleItem[] = [
+  {
+    id: 'shortcuts',
+    title: 'Atajos de Sueño',
+    subtitle: 'Rutinas & Registro',
+    description: 'Inicia siestas, programa descansos nocturnos y gestiona tus atajos rápidos de sueño.',
+    icon: 'flash',
+    activeColor: '#38BDF8', // Celeste / Cyan
+    badge: 'Rápido',
+    actionText: 'Explorar Atajos',
+  },
+  {
+    id: 'assistant',
+    title: 'Asistente del Sueño',
+    subtitle: 'IA 100% Local',
+    description: 'Consulta tus métricas de descanso, pide resúmenes y recibe consejos con privacidad total.',
+    icon: 'sparkles',
+    activeColor: '#A78BFA', // Violeta
+    badge: 'Offline',
+    actionText: 'Abrir Asistente',
+  },
+  {
+    id: 'sounds',
+    title: 'Paisajes Sonoros',
+    subtitle: 'Ruido Blanco & Relax',
+    description: 'Sintoniza sonidos relajantes de naturaleza, lluvia y meditaciones guiadas.',
+    icon: 'musical-notes',
+    activeColor: '#34D399', // Esmeralda
+    badge: 'Ambiente',
+    actionText: 'Escuchar Sonidos',
+  },
+  {
+    id: 'noises',
+    title: 'Monitor de Ruidos',
+    subtitle: 'Detección Auditiva',
+    description: 'Registra eventos sonoros nocturnos con decibeles y visualización de ondas sonoras.',
+    icon: 'pulse',
+    activeColor: '#F472B6', // Rosa
+    badge: 'Audio',
+    actionText: 'Ver Registros',
+  },
+  {
+    id: 'achievements',
+    title: 'Logros y Hábitos',
+    subtitle: 'Gamificación & Rachas',
+    description: 'Desbloquea insignias por constancia de sueño, mantén tus rachas y acumula gemas.',
+    icon: 'trophy',
+    activeColor: '#FBBF24', // Ámbar / Dorado
+    badge: 'Nivel',
+    actionText: 'Ver Mis Logros',
+  },
+];
+
 export const SleepScreen: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState<SleepModuleTab>('shortcuts');
+  const [selectedModule, setSelectedModule] = useState<SleepModuleTab | null>(null);
+
+  // Animaciones para transiciones suaves y fluidas
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handleSelectModule = (modId: SleepModuleTab) => {
+    // 1. Suave desvanecimiento rápido de salida del Hub (120ms sin bloqueo)
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 120,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.96,
+        duration: 120,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSelectedModule(modId);
+      slideAnim.setValue(24);
+      scaleAnim.setValue(0.97);
+      fadeAnim.setValue(0);
+
+      // 2. Entrada fluida y sedosa del contenido con curva de desaceleración natural
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 280,
+          easing: Easing.bezier(0.2, 0.9, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  };
+
+  const handleBackToHub = () => {
+    // 1. Suave salida del contenido hacia abajo
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 140,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 16,
+        duration: 140,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.96,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSelectedModule(null);
+      slideAnim.setValue(-16);
+      scaleAnim.setValue(0.97);
+      fadeAnim.setValue(0);
+
+      // 2. Reaparición fluida y suave de la pantalla de módulos
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 260,
+          easing: Easing.bezier(0.2, 0.9, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 280,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  };
+
   const [logs, setLogs] = useState<SleepLog[]>([]);
   const [stats, setStats] = useState<SleepStats>({
     averageHours: 0,
@@ -70,6 +242,7 @@ export const SleepScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [backupLoading, setBackupLoading] = useState<boolean>(false);
   const [privacyModalVisible, setPrivacyModalVisible] = useState<boolean>(false);
+  const [shortcutConfirmItem, setShortcutConfirmItem] = useState<SleepShortcut | null>(null);
   const [wakeModalVisible, setWakeModalVisible] = useState<boolean>(false);
   const [wakeRating, setWakeRating] = useState<1 | 2 | 3 | 4 | 5>(4);
   const [wakeTags, setWakeTags] = useState<string[]>([]);
@@ -108,31 +281,61 @@ export const SleepScreen: React.FC = () => {
     }
   }, []);
 
+  // Limpiar datos de ejemplo iniciales para dejar la app en cero
   useEffect(() => {
-    loadData();
+    const initializeCleanState = async () => {
+      try {
+        const cleaned = await AsyncStorage.getItem('@just_breathe_clean_sample_data_v1');
+        if (!cleaned) {
+          await sleepService.clearAllSleepData();
+          await AsyncStorage.setItem('@just_breathe_clean_sample_data_v1', 'true');
+        }
+      } catch (err) {
+        console.warn('[SleepScreen] Error al inicializar limpieza:', err);
+      }
+      loadData();
+    };
+    initializeCleanState();
   }, [loadData]);
 
-  // Manejo de atajos (Iniciar siesta / noche programada)
-  const handleRunShortcut = async (shortcut: SleepShortcut) => {
+  const handleClearAllData = () => {
     Alert.alert(
-      `Iniciar ${shortcut.title}`,
-      `¿Deseas iniciar una sesión de ${shortcut.subtitle} (${shortcut.durationMinutes} minutos)?`,
+      'Borrar Datos Registrados',
+      '¿Deseas eliminar todos los registros y sesiones de ejemplo? La aplicación quedará limpia en 0.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Comenzar Ahora',
+          text: 'Borrar Todo',
+          style: 'destructive',
           onPress: async () => {
-            try {
-              const session = await sleepService.startSleepSession(shortcut.type, shortcut.durationMinutes);
-              setActiveSession(session);
-              Alert.alert('Sesión iniciada', `El descanso de ${shortcut.title} está en curso.`);
-            } catch {
-              Alert.alert('Error', 'No se pudo iniciar el atajo.');
-            }
+            await sleepService.clearAllSleepData();
+            await loadData();
+            setPrivacyModalVisible(false);
+            Alert.alert('Datos eliminados', 'Todos los registros han sido borrados.');
           },
         },
       ]
     );
+  };
+
+  // Manejo de atajos (Iniciar siesta / noche programada con Modal personalizado)
+  const handleRunShortcut = (shortcut: SleepShortcut) => {
+    setShortcutConfirmItem(shortcut);
+  };
+
+  const handleConfirmStartShortcut = async () => {
+    if (!shortcutConfirmItem) return;
+    try {
+      const session = await sleepService.startSleepSession(
+        shortcutConfirmItem.type,
+        shortcutConfirmItem.durationMinutes
+      );
+      setActiveSession(session);
+    } catch {
+      console.warn('[SleepScreen] Error al iniciar atajo');
+    } finally {
+      setShortcutConfirmItem(null);
+    }
   };
 
   // Despertar y guardar
@@ -535,39 +738,49 @@ export const SleepScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Lista de Eventos con Ondas Auditivas (Screenshot 3) */}
+      {/* Lista de Eventos con Ondas Auditivas */}
       <View style={styles.noisesList}>
-        {noiseEvents.map((event) => (
-          <View key={event.id} style={styles.noiseCard}>
-            <View style={styles.noiseHeaderRow}>
-              <Text style={styles.noiseTime}>{event.timeDisplay}</Text>
-              <View style={styles.noisePills}>
-                <View style={styles.durationPill}>
-                  <Text style={styles.durationPillText}>{event.durationMinutes} min</Text>
+        {noiseEvents.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="mic-outline" size={32} color={SLEEP_THEME.colors.textMuted} style={{ marginBottom: 6 }} />
+            <Text style={styles.emptyCardText}>No hay eventos sonoros capturados</Text>
+            <Text style={[styles.emptyCardText, { fontSize: 11, marginTop: 4, color: SLEEP_THEME.colors.textMuted }]}>
+              Las detecciones de audio y ruidos durante tu descanso aparecerán aquí.
+            </Text>
+          </View>
+        ) : (
+          noiseEvents.map((event) => (
+            <View key={event.id} style={styles.noiseCard}>
+              <View style={styles.noiseHeaderRow}>
+                <Text style={styles.noiseTime}>{event.timeDisplay}</Text>
+                <View style={styles.noisePills}>
+                  <View style={styles.durationPill}>
+                    <Text style={styles.durationPillText}>{event.durationMinutes} min</Text>
+                  </View>
+                  <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="trash-outline" size={16} color={SLEEP_THEME.colors.textMuted} />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="trash-outline" size={16} color={SLEEP_THEME.colors.textMuted} />
-                </TouchableOpacity>
+              </View>
+
+              {/* Onda Sonora Gráfica con Cyan Waves */}
+              <View style={styles.waveformContainer}>
+                {event.waveformPattern.map((val, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.waveformBar,
+                      {
+                        height: Math.max(4, Math.round(val * 24)),
+                        backgroundColor: idx % 2 === 0 ? SLEEP_THEME.colors.accent : '#818CF8',
+                      },
+                    ]}
+                  />
+                ))}
               </View>
             </View>
-
-            {/* Onda Sonora Gráfica con Cyan Waves */}
-            <View style={styles.waveformContainer}>
-              {event.waveformPattern.map((val, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.waveformBar,
-                    {
-                      height: Math.max(4, Math.round(val * 24)),
-                      backgroundColor: idx % 2 === 0 ? SLEEP_THEME.colors.accent : '#818CF8',
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-        ))}
+          ))
+        )}
       </View>
 
       {/* Historial de Noches Registradas */}
@@ -685,160 +898,250 @@ export const SleepScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={SLEEP_THEME.colors.background} />
 
-      {/* Top Bar Principal */}
-      <View style={styles.mainTopBar}>
-        <View>
-          <Text style={styles.appBrand}>JUST BREATHE</Text>
-          <Text style={styles.moduleTitle}>Asistente del Sueño</Text>
-        </View>
-
-        <View style={styles.topBarRight}>
-          <TouchableOpacity
-            style={styles.topIconBtn}
-            onPress={() => setPrivacyModalVisible(true)}
-            accessibilityLabel="Información de Privacidad"
-          >
-            <Ionicons name="help-circle-outline" size={22} color={SLEEP_THEME.colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.topIconBtn}
-            onPress={handleImport}
-            disabled={backupLoading}
-            accessibilityLabel="Importar Backup"
-          >
-            <Ionicons name="cloud-download-outline" size={20} color={SLEEP_THEME.colors.accent} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.topIconBtn}
-            onPress={handleExport}
-            disabled={backupLoading}
-            accessibilityLabel="Exportar Backup"
-          >
-            <Ionicons name="share-outline" size={20} color={SLEEP_THEME.colors.primary} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Navegador Segmentado de Pestañas Superiores */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsScroll}
+      <Animated.View
+        style={{
+          flex: 1,
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+        }}
       >
-        <TouchableOpacity
-          style={[styles.tabButton, currentTab === 'shortcuts' && styles.tabButtonActive]}
-          onPress={() => setCurrentTab('shortcuts')}
-        >
-          <Ionicons
-            name="flash-outline"
-            size={16}
-            color={currentTab === 'shortcuts' ? '#090D16' : SLEEP_THEME.colors.textSecondary}
-          />
-          <Text
-            style={[styles.tabButtonText, currentTab === 'shortcuts' && styles.tabButtonTextActive]}
+        {selectedModule === null ? (
+          // ========================================================
+          // PANTALLA PRINCIPAL: MÓDULOS EN CUADRÍCULA VERTICAL
+          // ========================================================
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.verticalHubScrollContent}
+            showsVerticalScrollIndicator={false}
           >
-            Atajos
-          </Text>
-        </TouchableOpacity>
+            {/* Top Bar Principal */}
+            <View style={styles.mainTopBar}>
+              <View>
+                <Text style={styles.appBrand}>JUST BREATHE</Text>
+                <Text style={styles.moduleTitle}>Sueño y Descanso</Text>
+              </View>
 
-        <TouchableOpacity
-          style={[styles.tabButton, currentTab === 'assistant' && styles.tabButtonActive]}
-          onPress={() => setCurrentTab('assistant')}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={16}
-            color={currentTab === 'assistant' ? '#090D16' : SLEEP_THEME.colors.textSecondary}
-          />
-          <Text
-            style={[styles.tabButtonText, currentTab === 'assistant' && styles.tabButtonTextActive]}
-          >
-            Asistente
-          </Text>
-        </TouchableOpacity>
+              <View style={styles.topBarRight}>
+                <TouchableOpacity
+                  style={styles.topIconBtn}
+                  onPress={() => setPrivacyModalVisible(true)}
+                  accessibilityLabel="Información de Privacidad"
+                >
+                  <Ionicons name="help-circle-outline" size={22} color={SLEEP_THEME.colors.textSecondary} />
+                </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabButton, currentTab === 'sounds' && styles.tabButtonActive]}
-          onPress={() => setCurrentTab('sounds')}
-        >
-          <Ionicons
-            name="musical-notes-outline"
-            size={16}
-            color={currentTab === 'sounds' ? '#090D16' : SLEEP_THEME.colors.textSecondary}
-          />
-          <Text
-            style={[styles.tabButtonText, currentTab === 'sounds' && styles.tabButtonTextActive]}
-          >
-            Sonidos
-          </Text>
-        </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.topIconBtn}
+                  onPress={handleImport}
+                  disabled={backupLoading}
+                  accessibilityLabel="Importar Backup"
+                >
+                  <Ionicons name="cloud-download-outline" size={20} color={SLEEP_THEME.colors.accent} />
+                </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabButton, currentTab === 'noises' && styles.tabButtonActive]}
-          onPress={() => setCurrentTab('noises')}
-        >
-          <Ionicons
-            name="pulse-outline"
-            size={16}
-            color={currentTab === 'noises' ? '#090D16' : SLEEP_THEME.colors.textSecondary}
-          />
-          <Text
-            style={[styles.tabButtonText, currentTab === 'noises' && styles.tabButtonTextActive]}
-          >
-            Ruidos
-          </Text>
-        </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.topIconBtn}
+                  onPress={handleExport}
+                  disabled={backupLoading}
+                  accessibilityLabel="Exportar Backup"
+                >
+                  <Ionicons name="share-outline" size={20} color={SLEEP_THEME.colors.primary} />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-        <TouchableOpacity
-          style={[styles.tabButton, currentTab === 'achievements' && styles.tabButtonActive]}
-          onPress={() => setCurrentTab('achievements')}
-        >
-          <Ionicons
-            name="trophy-outline"
-            size={16}
-            color={currentTab === 'achievements' ? '#090D16' : SLEEP_THEME.colors.textSecondary}
-          />
-          <Text
-            style={[
-              styles.tabButtonText,
-              currentTab === 'achievements' && styles.tabButtonTextActive,
-            ]}
-          >
-            Logros
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+            {/* Banner de sesión activa si la hay */}
+            {activeSession && (
+              <View style={styles.hubActiveSessionPill}>
+                <View style={styles.activeDot} />
+                <Text style={styles.hubActiveSessionText}>
+                  Descanso en curso • Iniciado a las{' '}
+                  {new Date(activeSession.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs
+                </Text>
+                <TouchableOpacity style={styles.hubWakeMiniBtn} onPress={handleWakeUp}>
+                  <Text style={styles.hubWakeMiniText}>Despertar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-      {/* Contenido Principal con Pull-To-Refresh */}
-      {loading && !refreshing ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={SLEEP_THEME.colors.accent} />
-          <Text style={styles.centerText}>Cargando descanso local...</Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 60 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                loadData();
-              }}
-              tintColor={SLEEP_THEME.colors.accent}
-            />
-          }
-        >
-          {currentTab === 'shortcuts' && renderShortcutsTab()}
-          {currentTab === 'assistant' && renderAssistantTab()}
-          {currentTab === 'sounds' && renderSoundsTab()}
-          {currentTab === 'noises' && renderNoisesTab()}
-          {currentTab === 'achievements' && renderAchievementsTab()}
-        </ScrollView>
-      )}
+            {/* Encabezado del Hub Vertical (Una Sola Columna) */}
+            <View style={styles.hubVerticalHeader}>
+              <Text style={styles.hubHeroTitle}>Módulos de Descanso</Text>
+              <Text style={styles.hubVerticalSubtitle}>
+                Desliza hacia abajo y toca un módulo para abrirlo
+              </Text>
+            </View>
+
+            {/* Lista Vertical en Una Sola Columna */}
+            <View style={styles.singleColumnContainer}>
+              {SLEEP_MODULES.map((mod) => (
+                <TouchableOpacity
+                  key={mod.id}
+                  style={[
+                    styles.singleColumnCard,
+                    { borderColor: `${mod.activeColor}40` },
+                  ]}
+                  onPress={() => handleSelectModule(mod.id)}
+                  activeOpacity={0.76}
+                >
+                  {/* Ícono Temático */}
+                  <View
+                    style={[
+                      styles.singleColumnIconBox,
+                      { backgroundColor: `${mod.activeColor}18` },
+                    ]}
+                  >
+                    <Ionicons name={mod.icon} size={26} color={mod.activeColor} />
+                  </View>
+
+                  {/* Información del Módulo */}
+                  <View style={styles.singleColumnInfo}>
+                    <View style={styles.singleColumnTitleRow}>
+                      <Text style={styles.singleColumnTitle}>{mod.title}</Text>
+                      <View
+                        style={[
+                          styles.singleColumnBadge,
+                          {
+                            backgroundColor: `${mod.activeColor}15`,
+                            borderColor: `${mod.activeColor}40`,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.singleColumnBadgeText,
+                            { color: mod.activeColor },
+                          ]}
+                        >
+                          {mod.badge}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={[styles.singleColumnSubtitle, { color: mod.activeColor }]}>
+                      {mod.subtitle}
+                    </Text>
+
+                    <Text style={styles.singleColumnDescription} numberOfLines={2}>
+                      {mod.description}
+                    </Text>
+                  </View>
+
+                  {/* Flecha de Navegación */}
+                  <View
+                    style={[
+                      styles.singleColumnArrowBox,
+                      { backgroundColor: `${mod.activeColor}15` },
+                    ]}
+                  >
+                    <Ionicons name="chevron-forward" size={18} color={mod.activeColor} />
+                  </View>
+
+                  {/* Barra lateral indicadora */}
+                  <View
+                    style={[
+                      styles.singleColumnLeftAccent,
+                      { backgroundColor: mod.activeColor },
+                    ]}
+                  />
+                </TouchableOpacity>
+              ))}
+
+              {/* Fila de Estadísticas Semanales Rápidas */}
+              <View style={styles.quickStatsRow}>
+                <View style={styles.quickStatBox}>
+                  <Ionicons name="time-outline" size={16} color={SLEEP_THEME.colors.accent} />
+                  <Text style={styles.quickStatValue}>
+                    {stats.averageHours > 0 ? `${stats.averageHours}h` : '--'}
+                  </Text>
+                  <Text style={styles.quickStatLabel}>Promedio</Text>
+                </View>
+                <View style={styles.quickStatBox}>
+                  <Ionicons name="star" size={16} color="#FBBF24" />
+                  <Text style={styles.quickStatValue}>
+                    {stats.averageQuality > 0 ? `${stats.averageQuality.toFixed(1)} ★` : '--'}
+                  </Text>
+                  <Text style={styles.quickStatLabel}>Calidad</Text>
+                </View>
+                <View style={styles.quickStatBox}>
+                  <Ionicons name="moon-outline" size={16} color="#818CF8" />
+                  <Text style={styles.quickStatValue}>{logs.length}</Text>
+                  <Text style={styles.quickStatLabel}>Registros</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Footer de Privacidad Local */}
+            <View style={styles.hubFooter}>
+              <Ionicons name="shield-checkmark" size={14} color={SLEEP_THEME.colors.success} />
+              <Text style={styles.hubFooterText}>
+                Todo se procesa y guarda localmente en tu dispositivo
+              </Text>
+            </View>
+          </ScrollView>
+        ) : (
+          // ========================================================
+          // PANTALLA SECUNDARIA: CONTENIDO DEL MÓDULO ELEGIDO
+          // ========================================================
+          <View style={{ flex: 1 }}>
+            {/* Barra Superior del Submódulo con Botón Volver */}
+            <View style={styles.subModuleHeaderBar}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={handleBackToHub}
+                activeOpacity={0.7}
+                accessibilityLabel="Volver a los módulos"
+              >
+                <Ionicons name="chevron-back" size={22} color={SLEEP_THEME.colors.accent} />
+                <Text style={styles.backButtonText}>Módulos</Text>
+              </TouchableOpacity>
+
+              <View style={styles.subModuleTitleContainer}>
+                <Text style={styles.subModuleHeaderTitle}>
+                  {SLEEP_MODULES.find((m) => m.id === selectedModule)?.title}
+                </Text>
+              </View>
+
+              <View style={styles.subModuleHeaderActions}>
+                {selectedModule === 'shortcuts' && (
+                  <TouchableOpacity style={styles.subHeaderActionBtn} onPress={openManualModal}>
+                    <Ionicons name="create-outline" size={18} color={SLEEP_THEME.colors.accent} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Contenido con Scroll Vertical Exclusivo del Módulo Seleccionado */}
+            {loading && !refreshing ? (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator size="large" color={SLEEP_THEME.colors.accent} />
+                <Text style={styles.centerText}>Cargando datos del módulo...</Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: 60 }}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={() => {
+                      setRefreshing(true);
+                      loadData();
+                    }}
+                    tintColor={SLEEP_THEME.colors.accent}
+                  />
+                }
+              >
+                {selectedModule === 'shortcuts' && renderShortcutsTab()}
+                {selectedModule === 'assistant' && renderAssistantTab()}
+                {selectedModule === 'sounds' && renderSoundsTab()}
+                {selectedModule === 'noises' && renderNoisesTab()}
+                {selectedModule === 'achievements' && renderAchievementsTab()}
+              </ScrollView>
+            )}
+          </View>
+        )}
+      </Animated.View>
 
       {/* Modal de Calificación al Despertar */}
       <Modal visible={wakeModalVisible} transparent animationType="slide">
@@ -1000,11 +1303,96 @@ export const SleepScreen: React.FC = () => {
               • Tus copias de seguridad (JSON) te pertenecen y puedes exportarlas cuando desees.
             </Text>
             <TouchableOpacity
+              style={styles.privacyResetBtn}
+              onPress={handleClearAllData}
+            >
+              <Ionicons name="trash-outline" size={15} color={SLEEP_THEME.colors.danger} />
+              <Text style={styles.privacyResetBtnText}>Borrar Registros (Reset a Cero)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.privacyCloseBtn}
               onPress={() => setPrivacyModalVisible(false)}
             >
               <Text style={styles.privacyCloseBtnText}>Entendido</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Personalizado de Confirmación de Atajo (Dark Palette Theme) */}
+      <Modal
+        visible={shortcutConfirmItem !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShortcutConfirmItem(null)}
+      >
+        <View style={styles.shortcutModalBackdrop}>
+          <View style={styles.shortcutModalBox}>
+            {/* Ícono de Cabecera con Halo Temático */}
+            <View
+              style={[
+                styles.shortcutModalIconCircle,
+                {
+                  backgroundColor:
+                    shortcutConfirmItem?.type === 'night'
+                      ? 'rgba(251, 191, 36, 0.15)'
+                      : 'rgba(56, 189, 248, 0.15)',
+                  borderColor:
+                    shortcutConfirmItem?.type === 'night'
+                      ? 'rgba(251, 191, 36, 0.35)'
+                      : 'rgba(56, 189, 248, 0.35)',
+                },
+              ]}
+            >
+              <Ionicons
+                name={shortcutConfirmItem?.type === 'night' ? 'moon' : 'time-outline'}
+                size={30}
+                color={shortcutConfirmItem?.type === 'night' ? '#FBBF24' : SLEEP_THEME.colors.accent}
+              />
+            </View>
+
+            {/* Título y Badge */}
+            <Text style={styles.shortcutModalTitle}>
+              Iniciar {shortcutConfirmItem?.title}
+            </Text>
+
+            <View style={styles.shortcutModalBadgePill}>
+              <Ionicons name="timer-outline" size={13} color={SLEEP_THEME.colors.accent} />
+              <Text style={styles.shortcutModalBadgeText}>
+                {shortcutConfirmItem?.durationMinutes} min •{' '}
+                {shortcutConfirmItem?.type === 'night' ? 'Sueño Nocturno' : 'Siesta Reparadora'}
+              </Text>
+            </View>
+
+            {/* Descripción */}
+            <Text style={styles.shortcutModalDescription}>
+              ¿Deseas iniciar una sesión de{' '}
+              <Text style={{ color: SLEEP_THEME.colors.textPrimary, fontWeight: '700' }}>
+                {shortcutConfirmItem?.subtitle}
+              </Text>
+              ? El descanso se registrará de forma 100% privada en tu dispositivo.
+            </Text>
+
+            {/* Botones de Acción */}
+            <View style={styles.shortcutModalButtonsRow}>
+              <TouchableOpacity
+                style={styles.shortcutModalCancelBtn}
+                onPress={() => setShortcutConfirmItem(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.shortcutModalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.shortcutModalConfirmBtn}
+                onPress={handleConfirmStartShortcut}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="play" size={16} color="#090D16" />
+                <Text style={styles.shortcutModalConfirmText}>Comenzar Ahora</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1051,34 +1439,216 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: SLEEP_THEME.colors.border,
   },
-  tabsScroll: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  // Hub Vertical de Módulos
+  verticalHubScrollContent: {
+    paddingBottom: 28,
+  },
+  hubActiveSessionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: SLEEP_THEME.colors.surfaceElevated,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: SLEEP_THEME.colors.accent,
     gap: 8,
   },
-  tabButton: {
+  hubActiveSessionText: {
+    flex: 1,
+    color: SLEEP_THEME.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  hubWakeMiniBtn: {
+    backgroundColor: SLEEP_THEME.colors.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  hubWakeMiniText: {
+    color: '#090D16',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  hubVerticalHeader: {
+    paddingHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  hubHeroTitle: {
+    color: SLEEP_THEME.colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  hubVerticalSubtitle: {
+    color: SLEEP_THEME.colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 3,
+  },
+  singleColumnContainer: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  singleColumnCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: SLEEP_THEME.colors.surface,
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1.5,
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  singleColumnLeftAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 14,
+    bottom: 14,
+    width: 3.5,
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
+  },
+  singleColumnIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  singleColumnInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  singleColumnTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: SLEEP_THEME.colors.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+  },
+  singleColumnTitle: {
+    color: SLEEP_THEME.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  singleColumnBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  singleColumnBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  singleColumnSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  singleColumnDescription: {
+    color: SLEEP_THEME.colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 4,
+  },
+  singleColumnArrowBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Fila de estadísticas rápidas
+  quickStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  quickStatBox: {
+    flex: 1,
+    backgroundColor: SLEEP_THEME.colors.surfaceElevated,
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: SLEEP_THEME.colors.border,
+    gap: 3,
   },
-  tabButtonActive: {
-    backgroundColor: SLEEP_THEME.colors.accent,
-    borderColor: SLEEP_THEME.colors.accent,
+  quickStatValue: {
+    color: SLEEP_THEME.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
   },
-  tabButtonText: {
-    color: SLEEP_THEME.colors.textSecondary,
-    fontSize: 13,
+  quickStatLabel: {
+    color: SLEEP_THEME.colors.textMuted,
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  hubFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    marginTop: 18,
+  },
+  hubFooterText: {
+    color: SLEEP_THEME.colors.textMuted,
+    fontSize: 11,
+  },
+  // Submódulo Abierto
+  subModuleHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: SLEEP_THEME.colors.border,
+    backgroundColor: SLEEP_THEME.colors.surface,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  backButtonText: {
+    color: SLEEP_THEME.colors.accent,
+    fontSize: 15,
     fontWeight: '600',
   },
-  tabButtonTextActive: {
-    color: '#090D16',
-    fontWeight: '700',
+  subModuleTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  subModuleHeaderTitle: {
+    color: SLEEP_THEME.colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  subModuleHeaderActions: {
+    width: 60,
+    alignItems: 'flex-end',
+  },
+  subHeaderActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: SLEEP_THEME.colors.surfaceElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tabContent: {
     paddingHorizontal: 16,
@@ -1759,6 +2329,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
+  privacyResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(251, 113, 133, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 113, 133, 0.4)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    width: '100%',
+    marginBottom: 10,
+  },
+  privacyResetBtnText: {
+    color: SLEEP_THEME.colors.danger,
+    fontWeight: '700',
+    fontSize: 13,
+  },
   privacyCloseBtn: {
     backgroundColor: SLEEP_THEME.colors.accent,
     paddingVertical: 12,
@@ -1771,6 +2360,108 @@ const styles = StyleSheet.create({
     color: '#090D16',
     fontWeight: '700',
     fontSize: 14,
+  },
+  // Modal de Confirmación de Atajos (Dark Theme)
+  shortcutModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(5, 8, 14, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  shortcutModalBox: {
+    backgroundColor: SLEEP_THEME.colors.surface,
+    borderRadius: 24,
+    padding: 22,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: SLEEP_THEME.colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  shortcutModalIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    borderWidth: 1,
+  },
+  shortcutModalTitle: {
+    color: SLEEP_THEME.colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  shortcutModalBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  shortcutModalBadgeText: {
+    color: SLEEP_THEME.colors.accent,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  shortcutModalDescription: {
+    color: SLEEP_THEME.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  shortcutModalButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  shortcutModalCancelBtn: {
+    flex: 1,
+    backgroundColor: SLEEP_THEME.colors.surfaceElevated,
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: SLEEP_THEME.colors.border,
+  },
+  shortcutModalCancelText: {
+    color: SLEEP_THEME.colors.textSecondary,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  shortcutModalConfirmBtn: {
+    flex: 1.4,
+    flexDirection: 'row',
+    gap: 6,
+    backgroundColor: SLEEP_THEME.colors.accent,
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: SLEEP_THEME.colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  shortcutModalConfirmText: {
+    color: '#090D16',
+    fontWeight: '800',
+    fontSize: 13,
   },
 });
 

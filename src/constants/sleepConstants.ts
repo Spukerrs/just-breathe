@@ -190,45 +190,16 @@ export const DEFAULT_SOUNDS: SleepSound[] = [
   },
 ];
 
-// Eventos de ruido / Detecciones nocturnas (Inspirados en Screenshot 3)
-export const DEFAULT_NOISE_EVENTS: SleepNoiseEvent[] = [
-  {
-    id: 'noise_1',
-    timeDisplay: '7:31 a. m.',
-    durationMinutes: 8,
-    dateDisplay: 'Hoy',
-    waveformPattern: [0.2, 0.4, 0.8, 0.5, 0.9, 0.3, 0.7, 0.4, 0.6, 0.2, 0.5, 0.8, 0.3, 0.6],
-  },
-  {
-    id: 'noise_2',
-    timeDisplay: '7:11 a. m.',
-    durationMinutes: 10,
-    dateDisplay: 'Hoy',
-    waveformPattern: [0.1, 0.3, 0.5, 0.9, 0.4, 0.6, 0.2, 0.8, 0.7, 0.3, 0.4, 0.5, 0.2, 0.1],
-  },
-  {
-    id: 'noise_3',
-    timeDisplay: '6:51 a. m.',
-    durationMinutes: 10,
-    dateDisplay: 'Hoy',
-    waveformPattern: [0.3, 0.5, 0.7, 0.6, 0.8, 0.9, 0.4, 0.3, 0.7, 0.5, 0.6, 0.4, 0.2, 0.1],
-  },
-  {
-    id: 'noise_4',
-    timeDisplay: '6:31 a. m.',
-    durationMinutes: 10,
-    dateDisplay: 'Hoy',
-    waveformPattern: [0.2, 0.2, 0.6, 0.4, 0.7, 0.5, 0.8, 0.3, 0.5, 0.6, 0.2, 0.4, 0.3, 0.1],
-  },
-];
+// Eventos de ruido / Detecciones nocturnas (Inicia vacío sin datos de ejemplo)
+export const DEFAULT_NOISE_EVENTS: SleepNoiseEvent[] = [];
 
-// Logros y Gamificación de Hábitos (Inspirados en Screenshot 4)
+// Logros y Gamificación de Hábitos (Inicia en 0 para nuevo usuario)
 export const DEFAULT_ACHIEVEMENTS: SleepAchievement[] = [
   {
     id: 'ach_tracking',
     title: 'Seguimiento de sueño',
     description: 'Monitorea tu descanso y levántate en tu fase de sueño óptima',
-    current: 771,
+    current: 0,
     target: 1000,
     icon: 'moon',
     categoryColor: '#38BDF8',
@@ -237,7 +208,7 @@ export const DEFAULT_ACHIEVEMENTS: SleepAchievement[] = [
     id: 'ach_score',
     title: 'Puntuación de sueño',
     description: 'Mantén una calidad promedio por encima de 4 estrellas',
-    current: 97,
+    current: 0,
     target: 98,
     icon: 'trophy',
     categoryColor: '#FBBF24',
@@ -246,7 +217,7 @@ export const DEFAULT_ACHIEVEMENTS: SleepAchievement[] = [
     id: 'ach_sonar',
     title: 'Consistencia de descanso',
     description: 'Registra tus descansos durante 7 días seguidos',
-    current: 5,
+    current: 0,
     target: 7,
     icon: 'pulse',
     categoryColor: '#818CF8',
@@ -255,7 +226,7 @@ export const DEFAULT_ACHIEVEMENTS: SleepAchievement[] = [
     id: 'ach_lullaby',
     title: 'Canciones de cuna',
     description: 'Usa paisajes sonoros para conciliar el sueño más rápido',
-    current: 2,
+    current: 0,
     target: 10,
     icon: 'musical-notes',
     categoryColor: '#34D399',
@@ -264,7 +235,7 @@ export const DEFAULT_ACHIEVEMENTS: SleepAchievement[] = [
     id: 'ach_bear',
     title: 'Oso durmiente',
     description: 'Alcanza más de 8 horas de sueño en una noche',
-    current: 3,
+    current: 0,
     target: 5,
     icon: 'paw',
     categoryColor: '#FB7185',
@@ -273,7 +244,7 @@ export const DEFAULT_ACHIEVEMENTS: SleepAchievement[] = [
     id: 'ach_clock',
     title: 'Regular como un reloj',
     description: 'Acuéstate a la misma hora durante al menos 5 noches',
-    current: 4,
+    current: 0,
     target: 5,
     icon: 'alarm',
     categoryColor: '#A78BFA',
@@ -282,7 +253,7 @@ export const DEFAULT_ACHIEVEMENTS: SleepAchievement[] = [
     id: 'ach_trunk',
     title: 'Duerme como un tronco',
     description: 'Noche completa sin interrupciones ni desvelos',
-    current: 1,
+    current: 0,
     target: 3,
     icon: 'shield-checkmark',
     categoryColor: '#38BDF8',
