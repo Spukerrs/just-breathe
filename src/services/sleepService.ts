@@ -2,21 +2,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import { SleepLog, SleepStats, ActiveSleepSession, BackupPayload } from '../types/sleep';
-import { SLEEP_STORAGE_KEYS } from '../constants/sleepConstants';
+import {
+  SleepLog,
+  SleepStats,
+  ActiveSleepSession,
+  BackupPayload,
+  SleepShortcut,
+  SleepAchievement,
+  SleepNoiseEvent,
+  LocalChatMessage,
+} from '../types/sleep';
+import {
+  SLEEP_STORAGE_KEYS,
+  DEFAULT_SHORTCUTS,
+  DEFAULT_ACHIEVEMENTS,
+  DEFAULT_NOISE_EVENTS,
+} from '../constants/sleepConstants';
 
-/**
- * Genera un identificador único para los registros de sueño sin dependencias externas.
- */
 const generateUniqueId = (): string => {
-  const timestamp = Date.now().toString(36);
-  const randomSuffix = Math.random().toString(36).substring(2, 9);
-  return `sleep_${timestamp}_${randomSuffix}`;
+  return `sleep_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
 };
 
-/**
- * Valida si un objeto coincide con la estructura requerida de SleepLog.
- */
 const isValidSleepLog = (item: unknown): item is SleepLog => {
   if (!item || typeof item !== 'object') return false;
   const candidate = item as Partial<SleepLog>;
@@ -31,15 +37,20 @@ const isValidSleepLog = (item: unknown): item is SleepLog => {
   const hasValidTags = candidate.tags === undefined || Array.isArray(candidate.tags);
   const hasValidNotes = candidate.notes === undefined || typeof candidate.notes === 'string';
 
-  return hasValidDate && hasValidBedtime && hasValidWakeTime && hasValidDuration && hasValidQuality && hasValidTags && hasValidNotes;
+  return (
+    hasValidDate &&
+    hasValidBedtime &&
+    hasValidWakeTime &&
+    hasValidDuration &&
+    hasValidQuality &&
+    hasValidTags &&
+    hasValidNotes
+  );
 };
 
-/**
- * Servicio modular de persistencia y análisis para el módulo de sueño "Just Breathe".
- */
 export const sleepService = {
   /**
-   * Obtiene todos los registros de sueño ordenados por fecha descendente.
+   * Obtiene todos los registros ordenados por fecha y hora más reciente.
    */
   async getSleepLogs(): Promise<SleepLog[]> {
     try {
@@ -50,17 +61,15 @@ export const sleepService = {
       if (!Array.isArray(parsed)) return [];
 
       const logs: SleepLog[] = parsed.filter(isValidSleepLog);
-
-      // Ordenar por fecha y hora de dormir descendente (más reciente primero)
       return logs.sort((a, b) => new Date(b.bedtime).getTime() - new Date(a.bedtime).getTime());
     } catch (error) {
       console.error('[SleepService] Error al obtener registros:', error);
-      throw new Error('No se pudieron cargar los registros de sueño.');
+      throw new Error('No se pudieron recuperar los registros de sueño.');
     }
   },
 
   /**
-   * Guarda un nuevo registro asignando un ID único.
+   * Guarda un nuevo registro con ID autogenerado.
    */
   async saveSleepLog(logData: Omit<SleepLog, 'id'>): Promise<SleepLog> {
     try {
@@ -72,7 +81,6 @@ export const sleepService = {
 
       const updatedLogs = [newLog, ...currentLogs];
       await AsyncStorage.setItem(SLEEP_STORAGE_KEYS.LOGS, JSON.stringify(updatedLogs));
-
       return newLog;
     } catch (error) {
       console.error('[SleepService] Error al guardar registro:', error);
@@ -81,21 +89,21 @@ export const sleepService = {
   },
 
   /**
-   * Elimina un registro de sueño según su identificador.
+   * Elimina un registro por su ID.
    */
   async deleteSleepLog(id: string): Promise<void> {
     try {
       const currentLogs = await this.getSleepLogs();
-      const filteredLogs = currentLogs.filter((log) => log.id !== id);
-      await AsyncStorage.setItem(SLEEP_STORAGE_KEYS.LOGS, JSON.stringify(filteredLogs));
+      const filtered = currentLogs.filter((log) => log.id !== id);
+      await AsyncStorage.setItem(SLEEP_STORAGE_KEYS.LOGS, JSON.stringify(filtered));
     } catch (error) {
       console.error('[SleepService] Error al eliminar registro:', error);
-      throw new Error('No se pudo eliminar el registro de sueño.');
+      throw new Error('No se pudo eliminar el registro.');
     }
   },
 
   /**
-   * Calcula el promedio de horas dormidas y la calidad media de los últimos 7 días.
+   * Calcula estadísticas de los últimos 7 días: promedio de horas y calidad media.
    */
   async getSleepStats(): Promise<SleepStats> {
     try {
@@ -103,149 +111,196 @@ export const sleepService = {
       const now = Date.now();
       const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
 
-      // Filtrar registros cuya fecha de despertar sea de los últimos 7 días
       const recentLogs = logs.filter((log) => {
-        const logTime = new Date(log.wakeTime || log.bedtime).getTime();
-        return logTime >= sevenDaysAgo;
+        const timestamp = new Date(log.wakeTime || log.bedtime).getTime();
+        return timestamp >= sevenDaysAgo;
       });
 
       if (recentLogs.length === 0) {
-        return {
-          averageHours: 0,
-          averageQuality: 0,
-          totalLogsLast7Days: 0,
-          totalMinutesLast7Days: 0,
-        };
+        return { averageHours: 0, averageQuality: 0, totalLogsLast7Days: 0, totalMinutesLast7Days: 0 };
       }
 
       const totalMinutes = recentLogs.reduce((acc, log) => acc + log.durationMinutes, 0);
       const totalQuality = recentLogs.reduce((acc, log) => acc + log.qualityRating, 0);
 
-      const averageMinutes = totalMinutes / recentLogs.length;
-      const averageHours = Number((averageMinutes / 60).toFixed(1));
-      const averageQuality = Number((totalQuality / recentLogs.length).toFixed(1));
-
       return {
-        averageHours,
-        averageQuality,
+        averageHours: Number(((totalMinutes / recentLogs.length) / 60).toFixed(1)),
+        averageQuality: Number((totalQuality / recentLogs.length).toFixed(1)),
         totalLogsLast7Days: recentLogs.length,
         totalMinutesLast7Days: totalMinutes,
       };
     } catch (error) {
       console.error('[SleepService] Error al calcular estadísticas:', error);
-      return {
-        averageHours: 0,
-        averageQuality: 0,
-        totalLogsLast7Days: 0,
-        totalMinutesLast7Days: 0,
-      };
+      return { averageHours: 0, averageQuality: 0, totalLogsLast7Days: 0, totalMinutesLast7Days: 0 };
     }
   },
 
-  // ==========================================
-  // GESTIÓN DE SESIÓN EN VIVO ("Live Tracker")
-  // ==========================================
-
-  /**
-   * Guarda el timestamp de inicio cuando el usuario presiona "Ir a dormir".
-   */
-  async startSleepSession(): Promise<ActiveSleepSession> {
-    try {
-      const now = new Date();
-      const session: ActiveSleepSession = {
-        startTime: now.toISOString(),
-        startDate: now.toISOString().split('T')[0],
-      };
-      await AsyncStorage.setItem(SLEEP_STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(session));
-      return session;
-    } catch (error) {
-      console.error('[SleepService] Error al iniciar sesión en vivo:', error);
-      throw new Error('No se pudo registrar el inicio del descanso.');
-    }
+  // ------------------------------------------
+  // TRACKER EN VIVO Y ATAJOS DE SIESTA
+  // ------------------------------------------
+  async startSleepSession(sessionType: 'night' | 'nap' = 'night', targetMinutes?: number): Promise<ActiveSleepSession> {
+    const now = new Date();
+    const session: ActiveSleepSession = {
+      startTime: now.toISOString(),
+      startDate: now.toISOString().split('T')[0],
+      sessionType,
+      targetDurationMinutes: targetMinutes,
+    };
+    await AsyncStorage.setItem(SLEEP_STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(session));
+    return session;
   },
 
-  /**
-   * Obtiene la sesión en vivo actual si existe.
-   */
   async getActiveSleepSession(): Promise<ActiveSleepSession | null> {
     try {
       const raw = await AsyncStorage.getItem(SLEEP_STORAGE_KEYS.ACTIVE_SESSION);
-      if (!raw) return null;
-      return JSON.parse(raw) as ActiveSleepSession;
-    } catch (error) {
-      console.error('[SleepService] Error al obtener sesión en vivo:', error);
+      return raw ? (JSON.parse(raw) as ActiveSleepSession) : null;
+    } catch {
       return null;
     }
   },
 
-  /**
-   * Limpia la sesión en vivo una vez que el usuario despierta y guarda o cancela.
-   */
   async clearActiveSleepSession(): Promise<void> {
-    try {
-      await AsyncStorage.removeItem(SLEEP_STORAGE_KEYS.ACTIVE_SESSION);
-    } catch (error) {
-      console.error('[SleepService] Error al limpiar sesión en vivo:', error);
-    }
+    await AsyncStorage.removeItem(SLEEP_STORAGE_KEYS.ACTIVE_SESSION);
   },
 
-  // ==========================================
-  // BACKUP / EXPORTACIÓN & IMPORTACIÓN LOCAL
-  // ==========================================
+  // ------------------------------------------
+  // ATAJOS, LOGROS Y RUIDOS LOCALES
+  // ------------------------------------------
+  async getShortcuts(): Promise<SleepShortcut[]> {
+    return DEFAULT_SHORTCUTS;
+  },
 
+  async getNoiseEvents(): Promise<SleepNoiseEvent[]> {
+    return DEFAULT_NOISE_EVENTS;
+  },
+
+  async getAchievements(): Promise<SleepAchievement[]> {
+    const logs = await this.getSleepLogs();
+    const totalLogs = logs.length;
+    const stats = await this.getSleepStats();
+
+    // Adaptar dinámicamente según la actividad real del usuario en el dispositivo
+    return DEFAULT_ACHIEVEMENTS.map((ach) => {
+      if (ach.id === 'ach_sonar') {
+        return { ...ach, current: Math.min(ach.target, stats.totalLogsLast7Days) };
+      }
+      if (ach.id === 'ach_tracking') {
+        return { ...ach, current: Math.min(ach.target, Math.max(10, totalLogs * 35)) };
+      }
+      if (ach.id === 'ach_score') {
+        return {
+          ...ach,
+          current: stats.averageQuality > 0 ? Math.round(stats.averageQuality * 19.5) : 0,
+        };
+      }
+      return ach;
+    });
+  },
+
+  // ------------------------------------------
+  // ASISTENTE DE SUEÑO LOCAL Y PRIVADO (OFFLINE)
+  // ------------------------------------------
   /**
-   * Genera un archivo JSON con todos los registros y lo comparte mediante expo-sharing.
+   * Responde consultas analizando únicamente los registros almacenados en el dispositivo.
+   * Cero datos enviados a servidores externos.
    */
+  async getLocalAssistantAnswer(promptText: string): Promise<LocalChatMessage> {
+    const logs = await this.getSleepLogs();
+    const stats = await this.getSleepStats();
+    const query = promptText.toLowerCase();
+
+    let response = '';
+
+    if (query.includes('hoy') || query.includes('anoche') || query.includes('dormido')) {
+      if (logs.length === 0) {
+        response =
+          'Aún no tienes registros de descanso guardados. ¡Usa el botón "Ir a dormir" o "Cargar Noche" para empezar hoy!';
+      } else {
+        const lastLog = logs[0];
+        const h = Math.floor(lastLog.durationMinutes / 60);
+        const m = lastLog.durationMinutes % 60;
+        const qualityWord =
+          lastLog.qualityRating >= 4 ? 'reparador y óptimo' : lastLog.qualityRating === 3 ? 'aceptable' : 'ligero';
+
+        response = `En tu última noche registrada (${lastLog.date}) dormiste ${h}h ${m}m con una calidad de ${lastLog.qualityRating}/5 estrellas (${qualityWord}). Te acostaste a las ${new Date(
+          lastLog.bedtime
+        ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} y despertaste a las ${new Date(
+          lastLog.wakeTime
+        ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+      }
+    } else if (query.includes('breve') || query.includes('resum')) {
+      if (logs.length === 0) {
+        response = 'Sin historial aún. Tus métricas aparecerán aquí tras tu primera noche registrada.';
+      } else {
+        response = `Resumen: Promedio de ${stats.averageHours} horas por noche en los últimos 7 días con calidad media de ${stats.averageQuality}/5 (${stats.totalLogsLast7Days} noches contabilizadas).`;
+      }
+    } else if (query.includes('puntuaci') || query.includes('score') || query.includes('calidad')) {
+      const score = Math.min(100, Math.round((stats.averageQuality / 5) * 60 + (Math.min(stats.averageHours, 8) / 8) * 40));
+      response = `Tu puntuación estimada de descanso es de ${score > 0 ? score : '--'}/100 basada en tu regularidad semanal y calidad promedio (${stats.averageQuality}/5).`;
+    } else if (query.includes('consejo') || query.includes('recomend') || query.includes('mejor')) {
+      const lastTags = logs[0]?.tags || [];
+      if (lastTags.includes('pantallas')) {
+        response =
+          '💡 Consejo: Registraste uso de pantallas antes de dormir. Intenta activar el filtro de luz azul 45 minutos antes de acostarte para estimular la producción natural de melatonina.';
+      } else if (lastTags.includes('cafeína')) {
+        response =
+          '☕ Consejo: La cafeína tiene una vida media de hasta 6 horas en el cuerpo. Procura evitar café o té estimulante después de las 17:00.';
+      } else {
+        response =
+          '🌙 Consejo: Mantener un horario regular para levantarte (incluso los fines de semana) es el factor #1 para sincronizar tu ritmo circadiano.';
+      }
+    } else {
+      response = `He analizado tus datos locales. Tienes ${logs.length} noches registradas. ¿Te gustaría saber cómo dormiste anoche o ver el promedio semanal?`;
+    }
+
+    return {
+      id: generateUniqueId(),
+      sender: 'assistant',
+      text: response,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+  },
+
+  // ------------------------------------------
+  // BACKUP LOCAL (EXPORT / IMPORT)
+  // ------------------------------------------
   async exportSleepData(): Promise<{ success: boolean; filePath?: string }> {
     try {
       const logs = await this.getSleepLogs();
       if (logs.length === 0) {
-        throw new Error('No hay registros de sueño para exportar.');
+        throw new Error('No hay registros de descanso para exportar.');
       }
 
-      const backupPayload: BackupPayload = {
+      const payload: BackupPayload = {
         app: 'Just Breathe',
         version: 1,
         exportedAt: new Date().toISOString(),
         logs,
       };
 
-      const jsonString = JSON.stringify(backupPayload, null, 2);
-      const fileName = `just_breathe_sleep_backup_${Date.now()}.json`;
+      const jsonString = JSON.stringify(payload, null, 2);
       const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
-      
-      if (!baseDir) {
-        throw new Error('No se pudo acceder al directorio del sistema de archivos.');
-      }
+      if (!baseDir) throw new Error('Sistema de archivos no disponible.');
 
-      const fileUri = `${baseDir}${fileName}`;
-
-      // Escribir archivo temporal
-      await FileSystem.writeAsStringAsync(fileUri, jsonString, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      const fileUri = `${baseDir}just_breathe_backup_${Date.now()}.json`;
+      await FileSystem.writeAsStringAsync(fileUri, jsonString, { encoding: FileSystem.EncodingType.UTF8 });
 
       const isAvailable = await Sharing.isAvailableAsync();
-      if (!isAvailable) {
-        throw new Error('La función de compartir no está disponible en este dispositivo.');
-      }
+      if (!isAvailable) throw new Error('Compartir no está disponible en este dispositivo.');
 
       await Sharing.shareAsync(fileUri, {
         mimeType: 'application/json',
-        dialogTitle: 'Exportar copia de seguridad - Just Breathe',
+        dialogTitle: 'Exportar Backup de Sueño - Just Breathe',
         UTI: 'public.json',
       });
 
       return { success: true, filePath: fileUri };
     } catch (error) {
-      console.error('[SleepService] Error en exportSleepData:', error);
+      console.error('[SleepService] Error exportSleepData:', error);
       throw error;
     }
   },
 
-  /**
-   * Permite seleccionar un archivo JSON, valida su estructura y combina los registros sin duplicados.
-   */
   async importSleepData(): Promise<{ success: boolean; importedCount: number; message: string }> {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -254,40 +309,29 @@ export const sleepService = {
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
-        return { success: false, importedCount: 0, message: 'Operación cancelada por el usuario.' };
+        return { success: false, importedCount: 0, message: 'Operación cancelada.' };
       }
 
-      const selectedAsset = result.assets[0];
-      const fileContent = await FileSystem.readAsStringAsync(selectedAsset.uri, {
+      const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri, {
         encoding: FileSystem.EncodingType.UTF8,
       });
 
-      let candidateLogs: unknown;
+      let candidate: unknown;
       try {
         const parsed = JSON.parse(fileContent);
-        // Soporta formato directo [ ...logs ] o encapsulado { logs: [ ... ] }
-        if (Array.isArray(parsed)) {
-          candidateLogs = parsed;
-        } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as BackupPayload).logs)) {
-          candidateLogs = (parsed as BackupPayload).logs;
-        } else {
-          throw new Error('Estructura inválida.');
-        }
+        candidate = Array.isArray(parsed) ? parsed : (parsed as BackupPayload)?.logs;
       } catch {
         throw new Error('El archivo seleccionado no contiene un formato JSON válido.');
       }
 
-      if (!Array.isArray(candidateLogs)) {
-        throw new Error('No se encontró una lista de registros en el archivo importado.');
+      if (!Array.isArray(candidate)) {
+        throw new Error('Estructura de respaldo no reconocida.');
       }
 
       const validNewLogs: SleepLog[] = [];
-      for (const item of candidateLogs) {
+      for (const item of candidate) {
         if (isValidSleepLog(item)) {
-          validNewLogs.push({
-            ...item,
-            id: item.id || generateUniqueId(),
-          });
+          validNewLogs.push({ ...item, id: item.id || generateUniqueId() });
         }
       }
 
@@ -295,35 +339,32 @@ export const sleepService = {
         throw new Error('No se encontraron registros de sueño válidos en el archivo.');
       }
 
-      // Fusionar con los registros existentes evitando duplicados (mismo ID o mismo bedtime exacto)
       const currentLogs = await this.getSleepLogs();
       const existingIds = new Set(currentLogs.map((l) => l.id));
       const existingBedtimes = new Set(currentLogs.map((l) => l.bedtime));
 
-      let newCount = 0;
-      const mergedList = [...currentLogs];
+      let importedCount = 0;
+      const merged = [...currentLogs];
 
       for (const log of validNewLogs) {
         if (!existingIds.has(log.id) && !existingBedtimes.has(log.bedtime)) {
-          mergedList.push(log);
+          merged.push(log);
           existingIds.add(log.id);
           existingBedtimes.add(log.bedtime);
-          newCount++;
+          importedCount++;
         }
       }
 
-      // Reordenar por fecha descendente
-      mergedList.sort((a, b) => new Date(b.bedtime).getTime() - new Date(a.bedtime).getTime());
-
-      await AsyncStorage.setItem(SLEEP_STORAGE_KEYS.LOGS, JSON.stringify(mergedList));
+      merged.sort((a, b) => new Date(b.bedtime).getTime() - new Date(a.bedtime).getTime());
+      await AsyncStorage.setItem(SLEEP_STORAGE_KEYS.LOGS, JSON.stringify(merged));
 
       return {
         success: true,
-        importedCount: newCount,
-        message: `Se importaron ${newCount} nuevos registros correctamente (${validNewLogs.length - newCount} ya existían).`,
+        importedCount,
+        message: `Se importaron ${importedCount} registros nuevos con éxito.`,
       };
     } catch (error) {
-      console.error('[SleepService] Error en importSleepData:', error);
+      console.error('[SleepService] Error importSleepData:', error);
       throw error;
     }
   },
