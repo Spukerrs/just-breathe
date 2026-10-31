@@ -1,10 +1,10 @@
-# Just Breathe 🧘🌙
+# Just Breathe
 
 Aplicación móvil de bienestar y relajación desarrollada en **React Native (Expo)** con **TypeScript**.
 
-## 📱 Módulos
+## Módulos
 
-### 🌙 Trackeo de Sueño (Sleep Tracker)
+### Trackeo de Sueño (Sleep Tracker)
 - **Tracker en Tiempo Real**: Registro de inicio de descanso al acostarse y temporizador en vivo.
 - **Calificación al Despertar**: Modal con calificación de 1 a 5 estrellas, selección de factores (cafeína, pantallas, ejercicio, estrés, etc.) y notas.
 - **Carga Manual**: Formulario para registrar noches anteriores con cálculo inteligente de duración horaria.
@@ -14,7 +14,7 @@ Aplicación móvil de bienestar y relajación desarrollada en **React Native (Ex
 
 ---
 
-## 🚀 Instalación y Ejecución
+## Instalación y Ejecución
 
 ```bash
 # Instalar dependencias
@@ -26,6 +26,6 @@ npx expo start
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 Este proyecto está bajo una licencia de software privativo. Todos los derechos están reservados a los autores originales. No está permitido el uso, distribución ni comercialización de este código sin autorización previa por escrito. Consulta el archivo [LICENSE](LICENSE) para más detalles.
