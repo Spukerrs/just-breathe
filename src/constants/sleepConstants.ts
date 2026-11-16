@@ -4,6 +4,7 @@ import {
   SleepNoiseEvent,
   SleepAchievement,
   AssistantPreset,
+  SoundTimerOption,
 } from '../types/sleep';
 
 export const SLEEP_STORAGE_KEYS = {
@@ -282,4 +283,24 @@ export const ASSISTANT_PRESETS: AssistantPreset[] = [
     tag: 'Consejo',
     prompt: 'Dame una recomendación para descansar mejor esta noche',
   },
+  {
+    id: 'preset_debt',
+    tag: 'Deuda',
+    prompt: '¿Tengo deuda de sueño acumulada esta semana?',
+  },
+  {
+    id: 'preset_chronotype',
+    tag: 'Cronotipo',
+    prompt: '¿Cuál es mi cronotipo y regularidad circadiana?',
+  },
+];
+
+export const DEFAULT_SLEEP_TARGET_HOURS = 8;
+
+export const SOUND_TIMER_OPTIONS: SoundTimerOption[] = [
+  { minutes: 0, label: 'Continuo' },
+  { minutes: 15, label: '15 min' },
+  { minutes: 30, label: '30 min' },
+  { minutes: 45, label: '45 min' },
+  { minutes: 60, label: '1 hora' },
 ];

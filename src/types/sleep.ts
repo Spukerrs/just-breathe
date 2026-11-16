@@ -26,8 +26,35 @@ export interface ActiveSleepSession {
 export interface BackupPayload {
   app: string;
   version: number;
+  schemaVersion?: number;
   exportedAt: string;
+  checksum?: string;
   logs: SleepLog[];
+}
+
+export interface SleepDebtAnalysis {
+  accumulatedDebtMinutes: number;
+  dailyAverageHours: number;
+  targetHoursPerNight: number;
+  deficitHours: number;
+  status: 'balanced' | 'mild_debt' | 'severe_debt' | 'surplus';
+  statusLabel: string;
+  recommendation: string;
+}
+
+export interface ChronotypeProfile {
+  chronotype: 'lark' | 'owl' | 'intermediate';
+  title: string;
+  icon: string;
+  averageBedtimeStr: string;
+  averageWakeTimeStr: string;
+  circadianConsistencyScore: number;
+  description: string;
+}
+
+export interface SoundTimerOption {
+  minutes: number;
+  label: string;
 }
 
 export interface SleepShortcut {
